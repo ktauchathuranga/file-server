@@ -1,0 +1,28 @@
+services:
+  php:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: file_serving_php
+    ports:
+      - "8080:80"
+    volumes:
+      - ./uploads:/var/www/html/uploads:rw
+      - ./logs:/var/www/html/logs:rw
+      - ./.env:/var/www/html/.env:ro
+    depends_on:
+      - db
+    networks:
+      - file-serving-network
+
+  db:
+    image: mysql:8.0
+    container_name: file_serving_db
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DB_PASS}
+      - MYSQL_DATABASE=${DB_NAME}
+    volumes:
+      - db_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - file-serving-network
