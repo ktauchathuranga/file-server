@@ -10,13 +10,13 @@ services:
       - ./uploads:/var/www/html/uploads
       - ./logs:/var/www/html/logs
     environment:
-      - DB_HOST=db
-      - DB_PORT=3306
-      - DB_NAME=file_serving_db
-      - DB_USER=root
-      - DB_PASS=root
-      - JWT_SECRET=your_random_jwt_secret_32_chars_minimum
-      - UPLOAD_DIR=/var/www/html/uploads
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASS=${DB_PASS}
+      - JWT_SECRET=${JWT_SECRET}
+      - UPLOAD_DIR=${UPLOAD_DIR}
     depends_on:
       - db
     networks:
@@ -26,8 +26,8 @@ services:
     image: mysql:8.0
     container_name: file_serving_db
     environment:
-      - MYSQL_ROOT_PASSWORD=root
-      - MYSQL_DATABASE=file_serving_db
+      - MYSQL_ROOT_PASSWORD=${DB_PASS}
+      - MYSQL_DATABASE=${DB_NAME}
     volumes:
       - db_data:/var/lib/mysql
       - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
