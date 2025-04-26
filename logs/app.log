@@ -1,3 +1,0 @@
-[2025-04-26 07:18:20] INFO [172.24.0.1]: Creating client: test_backend
-[2025-04-26 07:18:20] ERROR [172.24.0.1]: Client creation failed: SQLSTATE[23000]: Integrity constraint violation: 1062 Duplicate entry 'test_backend' for key 'api_clients.client_name'
-[2025-04-26 07:18:20] RESPONSE [172.24.0.1]: Response: {"error":"Client name already exists or creation failed"} (Status: 409)
