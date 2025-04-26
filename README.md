@@ -74,34 +74,34 @@ The file server consists of:
 ## Project Structure
 ```
 file-server/
-├── uploads/               # File storage (Docker volume)
-├── logs/                  # Log files (Docker volume)
+├── uploads/                 # File storage (Docker volume)
+├── logs/                    # Log files (Docker volume)
 ├── src/
 │   ├── config/
-│   │   ├── database.php   # Database connection
-│   │   ├── env.php        # Environment variable loader
+│   │   ├── database.php     # Database connection
+│   │   ├── env.php          # Environment variable loader
 │   ├── lib/
-│   │   ├── jwt.php        # Custom JWT implementation
-│   │   ├── db.php         # Database queries
-│   │   ├── file.php       # File handling (upload/serve)
-│   │   ├── utils.php      # Utility functions
+│   │   ├── jwt.php          # Custom JWT implementation
+│   │   ├── db.php           # Database queries
+│   │   ├── file.php         # File handling (upload/serve)
+│   │   ├── utils.php        # Utility functions
 │   ├── api/
-│   │   ├── signup.php     # Client signup endpoint
-│   │   ├── login.php      # Client login endpoint
-│   │   ├── upload_file.php # File upload endpoint
+│   │   ├── signup.php       # Client signup endpoint
+│   │   ├── login.php        # Client login endpoint
+│   │   ├── upload_file.php  # File upload endpoint
 │   │   ├── request_file.php # Generate one-time-use link
-│   │   ├── serve_file.php  # Serve file via token
+│   │   ├── serve_file.php   # Serve file via token
 ├── docker/
 │   ├── nginx/
-│   │   ├── nginx.conf     # Nginx configuration
+│   │   ├── nginx.conf       # Nginx configuration
 │   ├── php/
-│   │   ├── php.ini        # PHP configuration
+│   │   ├── php.ini          # PHP configuration
 │   ├── mysql/
-│   │   ├── init.sql       # MySQL schema initialization
-├── Dockerfile             # PHP/Nginx Docker image
-├── docker-compose.yml     # Docker Compose configuration
-├── .env                   # Environment variables
-├── index.php              # API routing
+│   │   ├── init.sql         # MySQL schema initialization
+├── Dockerfile               # PHP/Nginx Docker image
+├── docker-compose.yml       # Docker Compose configuration
+├── .env                     # Environment variables
+├── index.php                # API routing
 ```
 
 ## Setup Instructions
