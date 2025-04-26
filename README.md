@@ -33,6 +33,10 @@ This server does not interact directly with end users. Instead, it serves as a b
   - [Integration](#integration)
   - [Troubleshooting](#troubleshooting)
   - [Usage Example](#usage-example)
+    - [1. FileServe.java](#1-fileservejava)
+    - [2. FileServeMain.java](#2-fileservemainjava)
+    - [3. FileServeException.java](#3-fileserveexceptionjava)
+    - [4. file.sql](#4-filesql)
   - [Contributing](#contributing)
   - [License](#license)
 
@@ -359,163 +363,378 @@ The file server is designed to integrate with any backend system that needs secu
 ## Usage Example
 Below is a complete Java example demonstrating how a backend system can interact with the file server. The example signs up a client, logs in, uploads a file, requests a one-time-use link, and downloads the file to verify the workflow.
 
+### 1. FileServe.java
 ```java
-import java.io.ByteArrayOutputStream;
+package org.example;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.entity.mime.MultipartEntityBuilder;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.HttpEntity;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.io.entity.StringEntity;
+
 import java.io.File;
 import java.io.FileOutputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.Map;
 
-public class FileServerClient {
-    private static final String API_URL = "http://localhost:8080/api";
-    private static final HttpClient client = HttpClient.newHttpClient();
+class ClientCredentials {
+    private final String clientName;
+    private final String clientSecret;
 
-    public static String signup(String clientName, String clientSecret) throws Exception {
-        String json = String.format("{\"client_name\": \"%s\", \"client_secret\": \"%s\"}", clientName, clientSecret);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL + "/signup"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 201) {
-            return response.body().split("\"client_id\":")[1].split("}")[0];
-        }
-        throw new Exception("Signup failed: " + response.body());
+    public ClientCredentials(String clientName, String clientSecret) {
+        this.clientName = clientName;
+        this.clientSecret = clientSecret;
     }
 
-    public static String login(String clientName, String clientSecret) throws Exception {
-        String json = String.format("{\"client_name\": \"%s\", \"client_secret\": \"%s\"}", clientName, clientSecret);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL + "/login"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 200) {
-            return response.body().split("\"token\":\"")[1].split("\"")[0];
-        }
-        throw new Exception("Login failed: " + response.body());
+    public String getClientName() {
+        return clientName;
     }
 
-    public static String uploadFile(String token, File file) throws Exception {
-        String boundary = "----" + System.currentTimeMillis();
-        MultiPartBodyPublisher publisher = new MultiPartBodyPublisher(boundary)
-                .addPart("file", file.toPath(), "file");
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL + "/upload_file"))
-                .header("Authorization", "Bearer " + token)
-                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
-                .POST(publisher.build())
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 201) {
-            return response.body().split("\"file_id\":")[1].split("}")[0];
-        }
-        throw new Exception("Upload failed: " + response.body());
-    }
-
-    public static String requestFile(String token, String fileId) throws Exception {
-        String json = String.format("{\"file_id\": \"%s\"}", fileId);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(API_URL + "/request_file"))
-                .header("Authorization", "Bearer " + token)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() == 200) {
-            return response.body().split("\"url\":\"")[1].split("\"")[0];
-        }
-        throw new Exception("Request failed: " + response.body());
-    }
-
-    public static void downloadFile(String url, String outputPath) throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .GET()
-                .build();
-        HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
-        if (response.statusCode() == 200) {
-            try (FileOutputStream fos = new FileOutputStream(outputPath)) {
-                fos.write(response.body());
-            }
-        } else {
-            throw new Exception("Download failed: " + response.statusCode());
-        }
-    }
-
-    public static void main(String[] args) {
-        try {
-            // Step 1: Sign up a new client (one-time, comment out after first run)
-            String clientId = signup("test_backend", "your_client_secret");
-            System.out.println("Client ID: " + clientId);
-
-            // Step 2: Log in to get a JWT
-            String token = login("test_backend", "your_client_secret");
-            System.out.println("JWT: " + token);
-
-            // Step 3: Upload a file
-            File file = new File("path/to/document.pdf"); // Replace with actual file path
-            String fileId = uploadFile(token, file);
-            System.out.println("Uploaded File ID: " + fileId);
-
-            // Step 4: Request a one-time-use link
-            String fileUrl = requestFile(token, fileId);
-            System.out.println("File URL: " + fileUrl);
-
-            // Step 5: Download the file to verify
-            String outputPath = "downloaded_document.pdf";
-            downloadFile(fileUrl, outputPath);
-            System.out.println("File downloaded to: " + outputPath);
-
-            // The backend can now deliver fileUrl to the end user
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+    public String getClientSecret() {
+        return clientSecret;
     }
 }
 
-class MultiPartBodyPublisher {
-    private final String boundary;
-    private final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+interface FileService {
+    String signup(ClientCredentials credentials) throws FileServeException;
+    String login(ClientCredentials credentials) throws FileServeException;
+    String uploadFile(File file, String token, String courseId) throws FileServeException;
+    String requestFileLink(String fileId, String token) throws FileServeException;
+    void downloadFile(String url, String fileId, String outputDir) throws FileServeException;
+}
 
-    public MultiPartBodyPublisher(String boundary) {
-        this.boundary = boundary;
+public class FileServe implements FileService {
+    private static final String BASE_URL = "http://localhost:8080/api";
+    private final CloseableHttpClient httpClient;
+    private final ObjectMapper objectMapper;
+
+    public FileServe() {
+        this.httpClient = HttpClients.createDefault();
+        this.objectMapper = new ObjectMapper();
     }
 
-    public MultiPartBodyPublisher addPart(String name, Path filePath, String fieldName) throws Exception {
-        String fileName = filePath.getFileName().toString();
-        String mimeType = Files.probeContentType(filePath);
-        baos.write(("--" + boundary + "\r\n").getBytes());
-        baos.write(("Content-Disposition: form-data; name=\"" + fieldName + "\"; filename=\"" + fileName + "\"\r\n").getBytes());
-        baos.write(("Content-Type: " + mimeType + "\r\n\r\n").getBytes());
-        baos.write(Files.readAllBytes(filePath));
-        baos.write("\r\n".getBytes());
-        return this;
+    @Override
+    public String signup(ClientCredentials credentials) throws FileServeException {
+        try {
+            HttpPost request = new HttpPost(BASE_URL + "/signup");
+            request.setHeader("Content-Type", "application/json");
+
+            Map<String, String> payload = new HashMap<>();
+            payload.put("client_name", credentials.getClientName());
+            payload.put("client_secret", credentials.getClientSecret());
+
+            request.setEntity(new StringEntity(objectMapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+            return httpClient.execute(request, response -> {
+                int status = response.getCode();
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                if (status == 201) {
+                    Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+                    return result.get("client_id").toString();
+                }
+                try {
+                    throw new FileServeException("Signup failed: " + responseBody);
+                } catch (FileServeException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new FileServeException("Signup request failed", e);
+        }
     }
 
-    public HttpRequest.BodyPublisher build() {
-        baos.write(("--" + boundary + "--\r\n").getBytes());
-        return HttpRequest.BodyPublishers.ofByteArray(baos.toByteArray());
+    @Override
+    public String login(ClientCredentials credentials) throws FileServeException {
+        try {
+            HttpPost request = new HttpPost(BASE_URL + "/login");
+            request.setHeader("Content-Type", "application/json");
+
+            Map<String, String> payload = new HashMap<>();
+            payload.put("client_name", credentials.getClientName());
+            payload.put("client_secret", credentials.getClientSecret());
+
+            request.setEntity(new StringEntity(objectMapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+            return httpClient.execute(request, response -> {
+                int status = response.getCode();
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                if (status == 200) {
+                    Map<String, String> result = objectMapper.readValue(responseBody, Map.class);
+                    return result.get("token");
+                }
+                try {
+                    throw new FileServeException("Login failed: " + responseBody);
+                } catch (FileServeException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new FileServeException("Login request failed", e);
+        }
+    }
+
+    @Override
+    public String uploadFile(File file, String token, String courseId) throws FileServeException {
+        if (!isValidCourseId(courseId)) {
+            throw new FileServeException("Invalid Course ID: " + courseId);
+        }
+
+        try {
+            HttpPost request = new HttpPost(BASE_URL + "/upload_file");
+            request.setHeader("Authorization", "Bearer " + token);
+
+            // multipart entity MultipartEntityBuilder
+            HttpEntity entity = MultipartEntityBuilder.create()
+                    .addBinaryBody("file", file, ContentType.DEFAULT_BINARY, file.getName())
+                    .build();
+            request.setEntity(entity);
+
+            return httpClient.execute(request, response -> {
+                int status = response.getCode();
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                if (status == 201) {
+                    Map<String, Object> result = objectMapper.readValue(responseBody, Map.class);
+                    String fileId = result.get("file_id").toString();
+
+                    try {
+                        storeFileMetadata(fileId, file, courseId);
+                    } catch (FileServeException e) {
+                        throw new RuntimeException(e);
+                    }
+
+                    return fileId;
+                }
+                try {
+                    throw new FileServeException("File upload failed: " + responseBody);
+                } catch (FileServeException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new FileServeException("File upload request failed", e);
+        }
+    }
+
+    @Override
+    public String requestFileLink(String fileId, String token) throws FileServeException {
+        try {
+            HttpPost request = new HttpPost(BASE_URL + "/request_file");
+            request.setHeader("Authorization", "Bearer " + token);
+            request.setHeader("Content-Type", "application/json");
+
+            Map<String, String> payload = new HashMap<>();
+            payload.put("file_id", fileId);
+
+            request.setEntity(new StringEntity(objectMapper.writeValueAsString(payload), ContentType.APPLICATION_JSON));
+
+            return httpClient.execute(request, response -> {
+                int status = response.getCode();
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+
+                if (status == 200) {
+                    Map<String, String> result = objectMapper.readValue(responseBody, Map.class);
+                    return result.get("url");
+                }
+                try {
+                    throw new FileServeException("File link request failed: " + responseBody);
+                } catch (FileServeException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new FileServeException("File link request failed", e);
+        }
+    }
+
+    @Override
+    public void downloadFile(String url, String fileId, String outputDir) throws FileServeException {
+        String originalFilename = getOriginalFilename(fileId);
+        if (originalFilename == null) {
+            throw new FileServeException("No file found for fileId: " + fileId);
+        }
+
+        File outputDirFile = new File(outputDir);
+        if (!outputDirFile.exists() && !outputDirFile.mkdirs()) {
+            throw new FileServeException("Failed to create output directory: " + outputDir);
+        }
+        String outputPath = new File(outputDir, originalFilename).getAbsolutePath();
+
+        try {
+            HttpGet request = new HttpGet(url);
+
+            httpClient.execute(request, response -> {
+                int status = response.getCode();
+                if (status == 200) {
+                    HttpEntity entity = response.getEntity();
+                    try (FileOutputStream out = new FileOutputStream(outputPath)) {
+                        entity.writeTo(out);
+                    }
+                    return null;
+                }
+                String responseBody = EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
+                try {
+                    throw new FileServeException("File download failed: " + responseBody);
+                } catch (FileServeException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+        } catch (IOException e) {
+            throw new FileServeException("File download request failed", e);
+        }
+    }
+
+    private void storeFileMetadata(String fileId, File file, String courseId) throws FileServeException {
+        String sql = "INSERT INTO files (file_id, filename, course_id) VALUES (?, ?, ?)";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, fileId);
+            pstmt.setString(2, file.getName());
+            pstmt.setString(3, courseId);
+
+            pstmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new FileServeException("Failed to store file metadata", e);
+        }
+    }
+
+    private boolean isValidCourseId(String courseId) throws FileServeException {
+        String sql = "SELECT COUNT(*) FROM Course WHERE Course_ID = ?";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, courseId);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getInt(1) > 0;
+            }
+            return false;
+        } catch (SQLException e) {
+            throw new FileServeException("Failed to validate course ID", e);
+        }
+    }
+
+    private String getOriginalFilename(String fileId) throws FileServeException {
+        String sql = "SELECT filename FROM files WHERE file_id = ?";
+
+        try (Connection conn = Database.getConnection();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+
+            pstmt.setString(1, fileId);
+            ResultSet rs = pstmt.executeQuery();
+
+            if (rs.next()) {
+                return rs.getString("filename");
+            }
+            return null;
+        } catch (SQLException e) {
+            throw new FileServeException("Failed to retrieve original filename", e);
+        }
+    }
+
+    private String getFileExtension(String filename) {
+        return filename.substring(filename.lastIndexOf(".") + 1).toLowerCase();
+    }
+
+    public void close() {
+        try {
+            httpClient.close();
+        } catch (IOException _) {
+
+        }
     }
 }
 ```
 
+### 2. FileServeMain.java
+```java
+package org.example;
+
+import java.io.File;
+
+public class FileServeMain {
+    public static void main(String[] args) {
+        FileServe fileServe = new FileServe();
+
+        try {
+            // Signup
+            ClientCredentials credentials = new ClientCredentials("test_backend", "your_random_jwt_secret_32_chars_minimum");
+            String clientId = fileServe.signup(credentials);
+
+            // Login
+            String token = fileServe.login(credentials);
+
+            // Upload file for a specific course
+            File file = new File("D:/azure.pdf");
+            String courseId = "ICT2113";
+            String fileId = fileServe.uploadFile(file, token, courseId);
+
+            // Request file link
+            String downloadUrl = fileServe.requestFileLink(fileId, token);
+
+            String outputDir = "."; // in root of the porject
+            fileServe.downloadFile(downloadUrl, fileId, outputDir);
+
+        } catch (FileServeException e) {
+            e.printStackTrace();
+        } finally {
+            fileServe.close();
+        }
+    }
+}
+```
+
+### 3. FileServeException.java
+
+```java
+package org.example;
+
+public class FileServeException extends Exception {
+    public FileServeException(String message) {
+        super(message);
+    }
+
+    public FileServeException(String message, Throwable cause) {
+        super(message, cause);
+    }
+}
+```
+
+### 4. file.sql
+```sql
+CREATE TABLE files (
+    id BIGINT PRIMARY KEY AUTO_INCREMENT,
+    file_id VARCHAR(50) NOT NULL UNIQUE,
+    filename VARCHAR(255) NOT NULL,
+    course_id VARCHAR(50) NOT NULL,
+    upload_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (course_id) REFERENCES Course(Course_ID)
+);
+```
+
+
 **Instructions**:
-1. Save the code as `FileServerClient.java`.
-2. Replace `"path/to/document.pdf"` with the path to a real PDF file.
-3. Ensure the file server is running (`docker-compose up`).
-4. Compile and run:
-   ```bash
-   javac FileServerClient.java
-   java FileServerClient
-   ```
-5. Comment out the signup call after the first run to avoid duplicate client errors.
+1. Create a database including the table provided `file.sql`.
+2. Make sure docker compose is running.
+3. Run `FileServeMain.java`.
 
 ## Contributing
 Contributions are welcome! To contribute:
