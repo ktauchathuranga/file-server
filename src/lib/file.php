@@ -84,10 +84,8 @@ function upload_file($file, $client_id) {
 }
 
 function serve_file($file_path, $file_name, $mime_type) {
-    // Normalize paths to avoid duplicate slashes
-    $upload_dir = rtrim($_ENV['UPLOAD_DIR'], '/');
     $file_path = ltrim($file_path, '/');
-    $full_path = "$upload_dir/$file_path";
+    $full_path = $_ENV['UPLOAD_DIR'] . '/files/' . $file_path;
     
     log_message("Serve file details: UPLOAD_DIR={$_ENV['UPLOAD_DIR']}, file_path={$file_path}, full_path={$full_path}");
     
